@@ -1,22 +1,25 @@
+/*
+ * Just for practice
+ * reference: https://docs.oracle.com/cd/E19455-01/806-5257/sync-31/index.html
+ *
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <unistd.h>
 #include <pthread.h>
-#include <semaphore.h>
+#include <assert.h>
 
 #define BUFFER_SIZE 32
 
-#define P(x) sem_wait(&x)
-#define V(x) sem_post(&x)
-
 int in = 0;
 int out = 0;
+int count = 0;
 
 int buff[BUFFER_SIZE] = { 0 };
 
-sem_t empty_sem;
-sem_t full_sem;
+pthread_cond_t not_full;
+pthread_cond_t not_empty;
 pthread_mutex_t mutex;
 
 void print()
@@ -27,24 +30,37 @@ void print()
     printf("\n");
 }
 
+void cond_mutex_init()
+{
+    pthread_mutex_init(&mutex, NULL);
+
+    pthread_cond_init(&not_full, NULL);
+    pthread_cond_init(&not_empty, NULL);
+}
+
 void *producer()
 {
     while(1)
     {
         sleep(1);
 
-        P(empty_sem);
         pthread_mutex_lock(&mutex);
+
+        //assert(count < BUFFER_SIZE);
+
+        while (count >= BUFFER_SIZE)
+            pthread_cond_wait(&not_full, &mutex);
 
         in = in % BUFFER_SIZE;
         printf("(+)produce a product. buffer: ");
 
         buff[in] = 1;
         print();
-        in++;
-        
+        in++;   count++;
+
+        pthread_cond_signal(&not_empty); 
+
         pthread_mutex_unlock(&mutex);
-        V(full_sem);
     }
 }
 
@@ -53,35 +69,32 @@ void *consumer()
     while (1)
     {
         sleep(2);
-        P(full_sem);
         pthread_mutex_lock(&mutex);
+
+        while (count <= 0)
+            pthread_cond_wait(&not_empty, &mutex);
+
+        //assert(count > 0);
 
         out = out % BUFFER_SIZE;
         printf("(-)consume a product. buffer: ");
         
         buff[out] = 0;
         print();
-        ++out;
+        ++out;  count--;
+
+        pthread_cond_signal(&not_full);
 
         pthread_mutex_unlock(&mutex);
-        V(empty_sem);
     }
 }
 
-void sem_mutex_init()
-{
-    sem_init(&empty_sem, 0, BUFFER_SIZE);
-    sem_init(&full_sem, 0, 0);
-
-    pthread_mutex_init(&mutex, NULL);
-}
-
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     pthread_t t1;
     pthread_t t2;
 
-    sem_mutex_init();
+    cond_mutex_init();
 
     int ret = pthread_create(&t1, NULL, producer, NULL);
     if (ret != 0)
