@@ -1,3 +1,7 @@
+/*
+ * reference: https://blog.csdn.net/qq_36359022/article/details/78796784
+ */
+
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
 #include "queue.h"
